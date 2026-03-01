@@ -9,20 +9,20 @@ import { useClosestCity } from "./hooks/useClosestCity";
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const STATES = { LOADING: "LOADING", IDLE: "IDLE", DETECTED: "DETECTED", SCANNING: "SCANNING", COOLDOWN: "COOLDOWN" };
-const DETECT_INTERVAL_MS = 400;
-const STABLE_FRAMES_NEEDED = 3;
-const COOLDOWN_MS = 5000;
+const DETECT_INTERVAL_MS = 300;
+const STABLE_FRAMES_NEEDED = 1;
+const COOLDOWN_MS = 2000;
+/** Fallback: trigger scan after this long in DETECTED if stability didn’t fire first. */
+const DETECTED_TRIGGER_MS = 500;
 const CAPTURE_WIDTH = 640;
-const MIN_SCORE = 0.3;
-const LERP_FACTOR = 0.35;
-const IOU_THRESHOLD = 0.3;
-const IGNORED_CLASSES = new Set(["person"]);
 const SCAN_TIMEOUT_MS = 45000;
+const MIN_SCORE = 0.35;
+const LERP_FACTOR = 0.7;
+const IOU_THRESHOLD = 0.2;
+const IGNORED_CLASSES = new Set(["person"]);
+const MAX_MISS_FRAMES = 8;
 
-// How many consecutive COCO-SSD misses before we drop from DETECTED → IDLE
-const MAX_MISS_FRAMES = 4;
-
-// Motion fallback: triggers scan for objects COCO-SSD can't recognize
+// Motion fallback for objects COCO-SSD can't recognize
 const MOTION_FALLBACK_FRAMES = 8;
 const MOTION_DIFF_THRESHOLD = 12;
 const MOTION_STABLE_FRAMES = 2;
@@ -57,6 +57,39 @@ function computeIoU(a, b) {
   return union > 0 ? inter / union : 0;
 }
 
+/**
+ * Pick the most prominent object: high confidence + close to frame center.
+ * Objects held up are typically in the center; person/background at edges.
+ */
+function pickMostProminent(predictions, videoW, videoH) {
+  const valid = predictions.filter(
+    (p) => p.score >= MIN_SCORE && !IGNORED_CLASSES.has(p.class)
+  );
+  if (valid.length === 0) return null;
+
+  const centerX = 0.5;
+  const centerY = 0.45; // Slightly above center (item held up)
+
+  let best = null;
+  let bestProminence = 0;
+
+  for (const p of valid) {
+    const [x, y, w, h] = p.bbox;
+    const cx = (x + w / 2) / videoW;
+    const cy = (y + h / 2) / videoH;
+    const distFromCenter = Math.sqrt((cx - centerX) ** 2 + (cy - centerY) ** 2);
+    const centerWeight = Math.max(0, 1 - distFromCenter * 1.5); // 1 at center, 0 at edges
+    const prominence = p.score * (0.4 + 0.6 * centerWeight);
+
+    if (prominence > bestProminence) {
+      bestProminence = prominence;
+      best = p;
+    }
+  }
+
+  return best;
+}
+
 function getMotionDiff(ctx, prevData, width, height) {
   const current = ctx.getImageData(0, 0, width, height).data;
   if (!prevData) return { diff: 0, data: current };
@@ -89,7 +122,10 @@ export default function CameraFeed() {
   const cityRef = useRef("seattle");
   const smoothBboxRef = useRef(null);
 
-  // Motion fallback refs
+  /** When we entered DETECTED state (for time-based scan trigger). */
+  const detectedAtRef = useRef(0);
+  const boxClearTimeoutRef = useRef(null);
+
   const noDetectCountRef = useRef(0);
   const motionPrevFrameRef = useRef(null);
   const motionStableRef = useRef(0);
@@ -106,7 +142,7 @@ export default function CameraFeed() {
 
   useEffect(() => {
     if (!result) return;
-    const t = setTimeout(() => setResult(null), 8000);
+    const t = setTimeout(() => setResult(null), 4000);
     return () => clearTimeout(t);
   }, [result]);
 
@@ -136,20 +172,21 @@ export default function CameraFeed() {
     return () => { cancelled = true; };
   }, []);
 
-  const resetDetection = useCallback(() => {
+  const resetDetection = useCallback((clearBox = true) => {
     stableCountRef.current = 0;
     missCountRef.current = 0;
     lastDetectionRef.current = null;
-    smoothBboxRef.current = null;
     noDetectCountRef.current = 0;
     motionPrevFrameRef.current = null;
     motionStableRef.current = 0;
     motionActiveRef.current = false;
-    setTrackingBox(null);
+    if (clearBox) {
+      smoothBboxRef.current = null;
+      setTrackingBox(null);
+    }
   }, []);
 
   const captureAndScan = useCallback(async () => {
-    // Prevent concurrent scans
     if (scanningLockRef.current) return;
     scanningLockRef.current = true;
 
@@ -208,9 +245,11 @@ export default function CameraFeed() {
       setScanning(false);
       stateRef.current = STATES.COOLDOWN;
       setStatus("");
-      resetDetection();
+      resetDetection(false);
       setTimeout(() => {
         stateRef.current = STATES.IDLE;
+        smoothBboxRef.current = null;
+        setTrackingBox(null);
         setStatus("Ready — hold up an item");
       }, COOLDOWN_MS);
     } catch (err) {
@@ -225,9 +264,11 @@ export default function CameraFeed() {
       setError(msg);
       setScanning(false);
       stateRef.current = STATES.COOLDOWN;
-      resetDetection();
+      resetDetection(false);
       setTimeout(() => {
         stateRef.current = STATES.IDLE;
+        smoothBboxRef.current = null;
+        setTrackingBox(null);
         setStatus("Ready — hold up an item");
       }, COOLDOWN_MS);
     } finally {
@@ -256,13 +297,9 @@ export default function CameraFeed() {
 
     try {
       const predictions = await model.detect(video);
-
-      const best = predictions
-        .filter((p) => p.score >= MIN_SCORE && !IGNORED_CLASSES.has(p.class))
-        .sort((a, b) => b.score - a.score)[0];
+      const best = pickMostProminent(predictions, video.videoWidth, video.videoHeight);
 
       if (best) {
-        // Reset miss counter — we have a detection
         missCountRef.current = 0;
         noDetectCountRef.current = 0;
         motionPrevFrameRef.current = null;
@@ -279,8 +316,12 @@ export default function CameraFeed() {
         setTrackingBox({ ...smoothBboxRef.current });
 
         const prev = lastDetectionRef.current;
-        if (prev && prev.class === best.class && computeIoU(prev.bbox, normalized) > IOU_THRESHOLD) {
+        if (prev && computeIoU(prev.bbox, normalized) > IOU_THRESHOLD) {
+          // Same region — increment stability regardless of class label
           stableCountRef.current += 1;
+        } else if (prev) {
+          // Different region — don't fully reset, just hold current count
+          stableCountRef.current = Math.max(1, stableCountRef.current - 1);
         } else {
           stableCountRef.current = 1;
         }
@@ -288,32 +329,39 @@ export default function CameraFeed() {
 
         if (stateRef.current === STATES.IDLE) {
           stateRef.current = STATES.DETECTED;
+          if (boxClearTimeoutRef.current) {
+            clearTimeout(boxClearTimeoutRef.current);
+            boxClearTimeoutRef.current = null;
+          }
+          detectedAtRef.current = Date.now();
           setStatus("Object detected — hold still...");
         }
 
-        if (stateRef.current === STATES.DETECTED && stableCountRef.current >= STABLE_FRAMES_NEEDED) {
+        const elapsed = Date.now() - detectedAtRef.current;
+        const triggerByStability = stateRef.current === STATES.DETECTED && stableCountRef.current >= STABLE_FRAMES_NEEDED;
+        const triggerByTime = stateRef.current === STATES.DETECTED && elapsed >= DETECTED_TRIGGER_MS;
+        if (triggerByStability || triggerByTime) {
           captureAndScan();
         }
       } else {
-        // No COCO-SSD detection this frame
         noDetectCountRef.current += 1;
 
         if (stateRef.current === STATES.DETECTED) {
           missCountRef.current += 1;
-
-          // Only reset after several consecutive misses
           if (missCountRef.current >= MAX_MISS_FRAMES) {
             stateRef.current = STATES.IDLE;
             stableCountRef.current = 0;
             missCountRef.current = 0;
             lastDetectionRef.current = null;
-            smoothBboxRef.current = null;
-            setTrackingBox(null);
             setStatus("Ready — hold up an item");
+            if (boxClearTimeoutRef.current) clearTimeout(boxClearTimeoutRef.current);
+            boxClearTimeoutRef.current = setTimeout(() => {
+              smoothBboxRef.current = null;
+              setTrackingBox(null);
+              boxClearTimeoutRef.current = null;
+            }, 1500);
           }
-          // Otherwise keep DETECTED state and tracking box visible
         } else {
-          // In IDLE with no detection — clear tracking box
           smoothBboxRef.current = null;
           setTrackingBox(null);
         }
@@ -390,7 +438,6 @@ export default function CameraFeed() {
 
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* COCO-SSD tracking box */}
       {trackingBox && (
         <div
           className={`absolute pointer-events-none z-[5] ${scanning ? "animate-pulse" : ""}`}
@@ -413,7 +460,6 @@ export default function CameraFeed() {
         </div>
       )}
 
-      {/* Top bar */}
       <div className="absolute top-0 left-0 right-0 z-10 bg-black/70 backdrop-blur-sm px-5 py-4 flex items-center justify-between">
         <div>
           <div className="text-white font-extrabold text-2xl tracking-tight">Bin Sentinel</div>
@@ -422,7 +468,6 @@ export default function CameraFeed() {
         <CitySelector value={city} onChange={setCity} locationStatus={locationStatus} />
       </div>
 
-      {/* Bottom area: status pill + manual scan button */}
       <div className="absolute bottom-10 left-0 right-0 flex flex-col items-center gap-4 z-10">
         {!result && !error && status && (
           <span className={`px-8 py-4 rounded-full text-xl font-bold backdrop-blur-sm pointer-events-none ${
@@ -442,7 +487,6 @@ export default function CameraFeed() {
         )}
       </div>
 
-      {/* Result overlay */}
       {result && (
         <ResultOverlay
           item={result.item}
@@ -454,7 +498,6 @@ export default function CameraFeed() {
         />
       )}
 
-      {/* Error overlay */}
       {error && (
         <div
           className="absolute bottom-0 left-0 right-0 z-20 bg-red-900/90 backdrop-blur-md text-white px-8 py-8 rounded-t-3xl cursor-pointer"
