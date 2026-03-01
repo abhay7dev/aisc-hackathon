@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 from database import create_db_and_tables, engine
 from models import Scan
 from rag import get_facility_verdict
-from vision import identify_object
+from vlm_identify import identify_object_vlm
 
 VALID_CITIES = {"seattle", "nyc", "la", "chicago"}
 
@@ -45,21 +45,27 @@ async def scan(image: UploadFile = File(None), city: str = Form("seattle")):
 
     image_bytes = await image.read()
 
-    vision_result = identify_object(image_bytes)
-    normalized = vision_result["normalized"]
-    print(f"[scan] normalized: {normalized}")
+    try:
+        vlm_result = identify_object_vlm(image_bytes)
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": "VLM identification error", "detail": str(e)},
+        )
+
+    print(f"[scan] vlm identified: {vlm_result['item_name']}")
 
     try:
-        verdict = get_facility_verdict(normalized, city, vision_result)
+        verdict = get_facility_verdict(vlm_result, city)
     except ValueError as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
     except Exception as e:
         return JSONResponse(
             status_code=500,
-            content={"error": "Vision API error", "detail": str(e)},
+            content={"error": "Classification error", "detail": str(e)},
         )
 
-    item_name = vision_result["label"]
+    item_name = vlm_result["item_name"]
     result = {
         "item": item_name,
         "action": verdict["action"],
@@ -90,8 +96,16 @@ async def scan_test(
     if city not in VALID_CITIES:
         return JSONResponse(status_code=422, content={"error": "Invalid city"})
 
+    synthetic = {
+        "item_name": item,
+        "material": "unknown",
+        "color": "unknown",
+        "condition": "normal",
+        "is_disposable": True,
+    }
+
     try:
-        verdict = get_facility_verdict(item, city)
+        verdict = get_facility_verdict(synthetic, city)
     except ValueError as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
     except Exception as e:

@@ -47,7 +47,7 @@ export default function Scanner({ onScanComplete }) {
         <button
           onClick={() => fileInputRef.current.click()}
           disabled={loading}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-500 disabled:opacity-50"
         >
           {loading ? "Checking facility specs..." : "Scan Item"}
         </button>
@@ -63,10 +63,10 @@ export default function Scanner({ onScanComplete }) {
       />
 
       {loading && (
-        <div className="text-gray-500 mt-2">Checking facility specs...</div>
+        <div className="text-gray-400 mt-2">Checking facility specs...</div>
       )}
 
-      {error && <div className="text-red-600 mt-2">{error}</div>}
+      {error && <div className="text-red-400 mt-2">{error}</div>}
 
       {result && <ResultCard {...result} />}
     </div>

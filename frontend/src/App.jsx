@@ -7,7 +7,7 @@ export default function App() {
 
   return (
     <div className="max-w-lg mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Bin Sentinel</h1>
+      <h1 className="text-2xl font-bold mb-4 text-blue-400">Bin Sentinel</h1>
       <Scanner onScanComplete={() => setRefreshKey((k) => k + 1)} />
       <History refreshKey={refreshKey} />
     </div>

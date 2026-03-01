@@ -1,14 +1,12 @@
 const ACTION_STYLES = {
-  RECYCLE: "bg-green-100 border-green-500 text-green-800",
-  TRASH: "bg-red-100 border-red-500 text-red-800",
-  COMPOST: "bg-amber-100 border-amber-500 text-amber-800",
-  SPECIAL: "bg-purple-100 border-purple-500 text-purple-800",
-  NOT_DISPOSABLE: "bg-blue-100 border-blue-500 text-blue-800",
+  RECYCLE: "bg-green-900/50 border-green-500 text-green-300",
+  TRASH: "bg-red-900/50 border-red-500 text-red-300",
+  COMPOST: "bg-amber-900/50 border-amber-500 text-amber-300",
+  SPECIAL: "bg-purple-900/50 border-purple-500 text-purple-300",
 };
 
 const ACTION_LABELS = {
   SPECIAL: "SPECIAL DISPOSAL",
-  NOT_DISPOSABLE: "NOT DISPOSABLE",
 };
 
 export default function ResultCard({ item, action, reason, confidence, city }) {
