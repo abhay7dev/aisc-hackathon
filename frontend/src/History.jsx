@@ -7,6 +7,8 @@ const ACTION_COLORS = {
   RECYCLE: "text-green-600",
   TRASH: "text-red-600",
   COMPOST: "text-amber-600",
+  SPECIAL: "text-purple-600",
+  NOT_DISPOSABLE: "text-blue-600",
 };
 
 export default function History({ refreshKey }) {
@@ -30,7 +32,7 @@ export default function History({ refreshKey }) {
             <span className={`font-bold ${ACTION_COLORS[s.action] || ""}`}>
               {s.action}
             </span>
-            <span>{s.item}</span>
+            <span className="text-sm truncate flex-1">{s.reason}</span>
             <span className="text-gray-400 text-sm">{s.city}</span>
             <span className="text-gray-400 text-sm ml-auto">
               {new Date(s.timestamp).toLocaleTimeString()}

@@ -50,7 +50,7 @@ async def scan(image: UploadFile = File(None), city: str = Form("seattle")):
     print(f"[scan] normalized: {normalized}")
 
     try:
-        verdict = get_facility_verdict(normalized, city)
+        verdict = get_facility_verdict(normalized, city, vision_result)
     except ValueError as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
     except Exception as e:
