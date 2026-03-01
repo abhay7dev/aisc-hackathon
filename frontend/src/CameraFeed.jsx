@@ -39,6 +39,33 @@ function normalizeBbox(bbox, videoW, videoH) {
   };
 }
 
+/**
+ * Map normalized video bbox {x,y,w,h} to container percentage for overlay.
+ * Uses object-cover so the box aligns with the video's displayed (possibly cropped) area,
+ * and applies mirroring to match -scale-x-100. rect = video.getBoundingClientRect().
+ */
+function normalizedToDisplayBox(norm, rect, videoW, videoH) {
+  if (!rect || rect.width <= 0 || rect.height <= 0 || videoW <= 0 || videoH <= 0) {
+    return {
+      left: (1 - norm.x - norm.w) * 100,
+      top: norm.y * 100,
+      width: norm.w * 100,
+      height: norm.h * 100,
+    };
+  }
+  const scale = Math.max(rect.width / videoW, rect.height / videoH);
+  const visibleW = videoW * scale;
+  const visibleH = videoH * scale;
+  const offsetX = (rect.width - visibleW) / 2;
+  const offsetY = (rect.height - visibleH) / 2;
+  return {
+    left: (offsetX + (1 - norm.x - norm.w) * videoW * scale) / rect.width * 100,
+    top: (offsetY + norm.y * videoH * scale) / rect.height * 100,
+    width: (norm.w * videoW * scale) / rect.width * 100,
+    height: (norm.h * videoH * scale) / rect.height * 100,
+  };
+}
+
 function lerpBox(current, target, factor) {
   return {
     x: current.x + (target.x - current.x) * factor,
@@ -173,7 +200,7 @@ export default function CameraFeed() {
 
   useEffect(() => {
     if (!result) return;
-    const t = setTimeout(() => setResult(null), 2500);
+    const t = setTimeout(() => setResult(null), 3000);
     return () => clearTimeout(t);
   }, [result]);
 
@@ -350,7 +377,8 @@ export default function CameraFeed() {
         } else {
           smoothBboxRef.current = lerpBox(smoothBboxRef.current, normalized, LERP_FACTOR);
         }
-        setTrackingBox({ ...smoothBboxRef.current });
+        const rect = video.getBoundingClientRect();
+        setTrackingBox(normalizedToDisplayBox(smoothBboxRef.current, rect, video.videoWidth, video.videoHeight));
 
         const prev = lastDetectionRef.current;
         if (prev && computeIoU(prev.bbox, normalized) > IOU_THRESHOLD) {
@@ -419,7 +447,8 @@ export default function CameraFeed() {
             const motionBox = prevData ? getMotionBbox(ctx, prevData, canvas.width, canvas.height) : null;
             if (motionBox) {
               motionBboxRef.current = motionBox;
-              setTrackingBox({ ...motionBox });
+              const rect = video.getBoundingClientRect();
+              setTrackingBox(normalizedToDisplayBox(motionBox, rect, video.videoWidth, video.videoHeight));
               consecutiveNoDetectRef.current = 0;
             }
           } else if (motionActiveRef.current) {
@@ -484,10 +513,10 @@ export default function CameraFeed() {
         <div
           className={`absolute pointer-events-none z-[5] ${scanning ? "animate-pulse" : ""}`}
           style={{
-            left: `${(1 - trackingBox.x - trackingBox.w) * 100}%`,
-            top: `${trackingBox.y * 100}%`,
-            width: `${trackingBox.w * 100}%`,
-            height: `${trackingBox.h * 100}%`,
+            left: `${trackingBox.left}%`,
+            top: `${trackingBox.top}%`,
+            width: `${trackingBox.width}%`,
+            height: `${trackingBox.height}%`,
           }}
         >
           <div className={`absolute inset-0 rounded-2xl border-2 transition-shadow duration-300 ${
@@ -510,7 +539,7 @@ export default function CameraFeed() {
         <CitySelector value={city} onChange={setCity} locationStatus={locationStatus} />
       </div>
 
-      <div className="absolute bottom-10 left-0 right-0 flex flex-col items-center gap-4 z-10">
+      <div className="absolute top-24 left-0 right-0 flex flex-col items-center gap-4 z-10">
         {!result && !error && status && (
           <span className={`px-8 py-4 rounded-full text-xl font-bold backdrop-blur-sm pointer-events-none ${
             scanning ? "bg-emerald-600/80 text-white" : "bg-black/60 text-white/90"
