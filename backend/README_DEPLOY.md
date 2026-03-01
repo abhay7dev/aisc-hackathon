@@ -7,15 +7,13 @@
 3. Set the **root directory** to `/backend`
 4. Set these **environment variables** in Railway:
    - `PERPLEXITY_API_KEY` — your Perplexity API key
-   - `GOOGLE_APPLICATION_CREDENTIALS` — path to the GCP service account JSON (see below)
    - `CHROMA_PERSIST_DIR` — set to `./chroma_db`
    - `DATABASE_URL` — set to `sqlite:///./bin_sentinel.db`
-5. **GCP service account key**: `gcp-key.json` must NOT be committed to git. Add it as a Railway secret file or mount it via Railway's volume/file mechanism.
-6. After first deploy, run `ingest.py` once to populate ChromaDB:
+5. After first deploy, run `ingest.py` once to populate ChromaDB (if using RAG):
    ```
    railway run python ingest.py
    ```
-   This must complete before `/scan` can return verdicts.
+   This must complete before `/scan` can return verdicts (when using RAG pipeline).
 
 ## Frontend (Vercel)
 

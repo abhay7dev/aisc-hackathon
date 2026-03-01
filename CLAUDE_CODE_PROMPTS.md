@@ -1,6 +1,10 @@
 # BIN SENTINEL — Claude Code Prompt Sequence
 # Copy-paste these prompts into Claude Code in order.
 # Wait for Claude Code to finish each prompt before pasting the next one.
+#
+# NOTE: Google Cloud Vision has been removed from this project. The backend now uses
+# Perplexity (Claude) with image + full city MRF doc in one call (see classify.py).
+# Ignore any prompts below that reference vision.py or GOOGLE_APPLICATION_CREDENTIALS.
 
 ---
 

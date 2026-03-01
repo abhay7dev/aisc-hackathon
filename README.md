@@ -1,6 +1,6 @@
 # Bin Sentinel
 
-Bin Sentinel is a facility-aware recycling classification system that uses a camera to identify disposable objects via Google Cloud Vision, retrieves local Materials Recovery Facility (MRF) specs through a LangChain RAG pipeline, and returns a RECYCLE / TRASH / COMPOST verdict with facility-specific reasoning — because recyclability is local, and our system knows exactly why.
+Bin Sentinel is a facility-aware recycling classification system. The camera captures an item; the backend identifies and classifies it using local Materials Recovery Facility (MRF) specs and returns a RECYCLE / TRASH / COMPOST verdict with facility-specific reasoning — because recyclability is local, and our system explains exactly why.
 
 ## Quickstart
 

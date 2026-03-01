@@ -7,10 +7,9 @@ Read this file in full before writing any code. Do not deviate from the decision
 
 ## What This Project Does
 
-A software camera is always running, and when a disposable object comes into focus → Google Cloud Vision API identifies the object →
-LangChain RAG pipeline retrieves the relevant local MRF (Materials Recovery Facility) spec chunks →
-Claude Sonnet (via Perplexity API) reasons against those specs → Returns a RECYCLE / TRASH / COMPOST
-verdict with a specific, facility-referenced explanation.
+A software camera is always running, and when a disposable object comes into focus → the image is sent to the backend →
+Claude Sonnet (via Perplexity API) identifies the item and classifies it using the local MRF (Materials Recovery Facility) doc for the selected city →
+Returns a RECYCLE / TRASH / COMPOST verdict with a specific, facility-referenced explanation.
 
 The key insight: recyclability is LOCAL. A black plastic container is recyclable nowhere because
 NIR optical sorters cannot detect carbon-black pigmented polymers. Our system knows this — and
@@ -27,9 +26,8 @@ bin-sentinel/
 │   └── settings.json          ← Claude Code configuration
 ├── backend/
 │   ├── main.py                ← FastAPI app: /scan, /health, /history endpoints
-│   ├── vision.py              ← Google Cloud Vision wrapper
-│   ├── vision_normalize.py    ← Label normalization map (build this first)
-│   ├── rag.py                 ← LangChain RAG pipeline + Perplexity LLM chain
+│   ├── classify.py            ← Image + city MRF doc → Perplexity (Claude) → verdict
+│   ├── rag.py                 ← LangChain RAG pipeline + Perplexity LLM chain (optional)
 │   ├── ingest.py              ← One-time ChromaDB ingestion script
 │   ├── models.py              ← SQLModel database models
 │   ├── database.py            ← SQLite setup
@@ -87,11 +85,10 @@ The `venv/` directory is gitignored. Never commit it.
 | Layer | Tool | Notes |
 |---|---|---|
 | Backend | FastAPI + Uvicorn | Latest |
-| Vision | Google Cloud Vision API | `google-cloud-vision` |
-| RAG orchestration | LangChain | `langchain==1.2.10` |
-| LLM integration | langchain-openai (ChatOpenAI pointed at Perplexity) | See LLM section below |
-| LLM | `anthropic/claude-sonnet-4-5` via Perplexity Agent API | See LLM section below |
-| Vector store | ChromaDB | `chromadb==1.5.2`, local, persisted to `./chroma_db` |
+| Image + classification | Perplexity API (Claude Sonnet) | Single call: image + full city MRF doc → verdict |
+| RAG orchestration | LangChain | `langchain` (optional; classify.py uses full doc in prompt) |
+| LLM | `anthropic/claude-sonnet-4-6` via Perplexity API | Image + text input |
+| Vector store | ChromaDB | `chromadb==1.5.2`, local, for RAG if used |
 | Embeddings | sentence-transformers (local, free, no API key) | `langchain-huggingface` + `sentence-transformers` |
 | Database | SQLite via SQLModel | Logs all scans |
 | Frontend | React + Vite | react template |
@@ -174,7 +171,6 @@ No API key, no cost, no external dependency.
 ```
 # backend/.env.example
 PERPLEXITY_API_KEY=
-GOOGLE_APPLICATION_CREDENTIALS=./service-account.json
 CHROMA_PERSIST_DIR=./chroma_db
 DATABASE_URL=sqlite:///./bin_sentinel.db
 ```
@@ -200,7 +196,7 @@ Response 200:
 }
 
 Response 422: { "error": "No image provided" }
-Response 500: { "error": "Vision API error", "detail": "..." }
+Response 500: { "error": "Classification error", "detail": "..." }
 
 GET /history → { "scans": [ { ...fields, "timestamp": "ISO8601" } ] }  // last 10
 GET /health  → { "status": "ok" }
@@ -211,46 +207,9 @@ All other cities return only RECYCLE or TRASH.
 
 ---
 
-## The Vision Normalizer — Build This First
+## The Vision Normalizer (optional / legacy)
 
-Google Cloud Vision returns generic labels like `tableware` that won't match MRF vocabulary.
-`vision_normalize.py` maps them to MRF-compatible terms before RAG retrieval.
-
-```python
-# vision_normalize.py
-LABEL_MAP = {
-    'tableware': 'plastic container',
-    'kitchenware': 'plastic container',
-    'drinkware': 'plastic bottle',
-    'bottle': 'plastic bottle',
-    'plastic bottle': 'plastic bottle',
-    'plastic bag': 'plastic bag film',
-    'shopping bag': 'plastic bag film',
-    'bag': 'plastic bag film',
-    'paper bag': 'paper bag',
-    'garden hose': 'garden hose tangler',
-    'hose': 'garden hose tangler',
-    'food packaging': 'plastic container',
-    'packaging': 'plastic container',
-    'container': 'plastic container',
-    'pizza box': 'pizza box cardboard',
-    'box': 'cardboard box',
-    'aluminum can': 'aluminum can metal',
-    'tin can': 'steel tin can metal',
-    'glass bottle': 'glass bottle jar',
-    'jar': 'glass bottle jar',
-    'foam': 'styrofoam EPS foam',
-    'styrofoam': 'styrofoam EPS foam',
-    'newspaper': 'newspaper paper',
-    'cardboard': 'corrugated cardboard',
-    'cup': 'disposable cup',
-    'straw': 'plastic straw',
-    'cutlery': 'plastic cutlery utensil',
-}
-
-def normalize_labels(labels: list[str]) -> str:
-    return ' '.join(LABEL_MAP.get(l.lower(), l.lower()) for l in labels[:4])
-```
+If you later integrate a separate image-labeling API (e.g. Google Cloud Vision), labels like `tableware` may need mapping to MRF vocabulary. The current pipeline uses Perplexity with the image + full city MRF doc in one call, so no normalizer is required. For reference, a `vision_normalize.py` label map could map e.g. `tableware` → `plastic container`, `bottle` → `plastic bottle`, etc., before RAG retrieval.
 
 ---
 
@@ -331,16 +290,16 @@ The city in the query string is critical — without it, wrong city specs can be
 fastapi
 uvicorn[standard]
 python-multipart
-langchain==1.2.10
+langchain
 langchain-community
 langchain-openai
 langchain-huggingface
 langchain-text-splitters
 sentence-transformers
 chromadb==1.5.2
-google-cloud-vision
 sqlmodel
 python-dotenv
+perplexityai
 ```
 
 No `openai` package version pinning needed — `langchain-openai` brings it as a dependency.
@@ -359,9 +318,8 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 ## Error Handling Rules
 
-- Vision returns 0 labels → proceed, set label to "unknown item", confidence "low"
-- Vision confidence < 0.6 → add uncertainty note to Claude prompt
-- ChromaDB returns 0 docs → return 500, do not guess a verdict
+- Classification/Perplexity errors → return 500 with "Classification error" and detail
+- ChromaDB returns 0 docs (if using RAG) → return 500, do not guess a verdict
 - Claude returns malformed JSON → catch parse error, return 500 with raw text for debugging
 - All errors return JSON, never plain text
 
@@ -383,6 +341,6 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 - Do not use OpenAI API key for anything
 - Do not use `langchain-anthropic` or `ChatAnthropic`
 - Do not install packages outside the venv
-- Do not commit `.env`, `gcp-key.json`, `venv/`, or `chroma_db/`
+- Do not commit `.env`, `venv/`, or `chroma_db/`
 - Do not use `sudo npm install`
 - Do not start UI styling until backend pipeline works end-to-end
