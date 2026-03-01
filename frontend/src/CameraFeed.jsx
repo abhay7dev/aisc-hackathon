@@ -200,7 +200,7 @@ export default function CameraFeed() {
 
   useEffect(() => {
     if (!result) return;
-    const t = setTimeout(() => setResult(null), 3000);
+    const t = setTimeout(() => setResult(null), 10000);
     return () => clearTimeout(t);
   }, [result]);
 
@@ -250,6 +250,7 @@ export default function CameraFeed() {
     if (scanningLockRef.current) return;
     scanningLockRef.current = true;
 
+    setResult(null);
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas || video.videoWidth === 0 || video.videoHeight === 0) {
