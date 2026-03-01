@@ -24,10 +24,10 @@ export default function ResultCard({ item, action, reason, confidence, city }) {
 }
 
 const OVERLAY_STYLES = {
-  RECYCLE: "bg-green-900/80 border-green-400",
-  TRASH: "bg-red-900/80 border-red-400",
-  COMPOST: "bg-amber-900/80 border-amber-400",
-  SPECIAL: "bg-purple-900/80 border-purple-400",
+  RECYCLE: "bg-green-900/85 border-green-400",
+  TRASH: "bg-red-900/85 border-red-400",
+  COMPOST: "bg-amber-900/85 border-amber-400",
+  SPECIAL: "bg-purple-900/85 border-purple-400",
 };
 
 export function ResultOverlay({ item, action, reason, confidence, city, onDismiss }) {
@@ -35,16 +35,17 @@ export function ResultOverlay({ item, action, reason, confidence, city, onDismis
 
   return (
     <div
-      className={`absolute bottom-6 left-4 right-4 z-20 border-2 rounded-xl p-4 backdrop-blur-sm text-white cursor-pointer ${style}`}
+      className={`absolute bottom-0 left-0 right-0 z-20 border-t-2 rounded-t-3xl px-8 pt-6 pb-10 backdrop-blur-md text-white cursor-pointer ${style}`}
       onClick={onDismiss}
     >
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-2xl font-bold">{ACTION_LABELS[action] || action}</span>
-        <span className="text-xs opacity-60 uppercase">{confidence} confidence</span>
+      <div className="w-12 h-1.5 bg-white/30 rounded-full mx-auto mb-6" />
+      <div className="flex items-baseline justify-between mb-4">
+        <span className="text-6xl font-black tracking-tight">{ACTION_LABELS[action] || action}</span>
+        <span className="text-base opacity-60 uppercase font-semibold">{confidence}</span>
       </div>
-      {item && <div className="text-sm font-medium opacity-80 mb-1">{item}</div>}
-      <div className="text-sm">{reason}</div>
-      <div className="text-xs opacity-50 mt-2">{city} &middot; tap to dismiss</div>
+      {item && <div className="text-2xl font-semibold opacity-85 mb-3">{item}</div>}
+      <div className="text-xl leading-relaxed">{reason}</div>
+      <div className="text-base opacity-50 mt-5">{city} &middot; tap to dismiss</div>
     </div>
   );
 }
