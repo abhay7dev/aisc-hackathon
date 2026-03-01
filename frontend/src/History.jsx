@@ -4,9 +4,9 @@ import axios from "axios";
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const ACTION_COLORS = {
-  RECYCLE: "text-green-400",
+  RECYCLE: "text-blue-400",
   TRASH: "text-red-400",
-  COMPOST: "text-amber-400",
+  COMPOST: "text-green-400",
   SPECIAL: "text-purple-400",
 };
 

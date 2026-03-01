@@ -532,15 +532,19 @@ export default function CameraFeed() {
         </div>
       )}
 
-      <div className="absolute top-0 left-0 right-0 z-10 bg-black/70 backdrop-blur-sm px-5 py-4 flex items-center justify-between">
-        <div>
-          <div className="text-white font-extrabold text-2xl tracking-tight">Bin Sentinel</div>
-          <div className="text-emerald-300 text-sm mt-0.5">Hold your item up to the camera</div>
+      <div className="absolute top-0 left-0 right-0 z-10 bg-black/70 backdrop-blur-sm px-5 py-8 min-h-[7.5rem] flex items-center justify-center">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="text-center">
+            <div className="text-white font-extrabold text-4xl tracking-tight">Bin Sentinel</div>
+            <div className="text-emerald-300 text-lg mt-0.5">Hold your item up to the camera</div>
+          </div>
         </div>
-        <CitySelector value={city} onChange={setCity} locationStatus={locationStatus} />
+        <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-auto">
+          <CitySelector value={city} onChange={setCity} locationStatus={locationStatus} />
+        </div>
       </div>
 
-      <div className="absolute top-24 left-0 right-0 flex flex-col items-center gap-4 z-10">
+      <div className="absolute top-[9rem] left-0 right-0 flex flex-col items-center gap-2 z-10">
         {!result && !error && status && (
           <span className={`px-8 py-4 rounded-full text-xl font-bold backdrop-blur-sm pointer-events-none ${
             scanning ? "bg-emerald-600/80 text-white" : "bg-black/60 text-white/90"
