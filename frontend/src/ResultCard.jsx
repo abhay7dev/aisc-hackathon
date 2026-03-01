@@ -22,3 +22,29 @@ export default function ResultCard({ item, action, reason, confidence, city }) {
     </div>
   );
 }
+
+const OVERLAY_STYLES = {
+  RECYCLE: "bg-green-900/80 border-green-400",
+  TRASH: "bg-red-900/80 border-red-400",
+  COMPOST: "bg-amber-900/80 border-amber-400",
+  SPECIAL: "bg-purple-900/80 border-purple-400",
+};
+
+export function ResultOverlay({ item, action, reason, confidence, city, onDismiss }) {
+  const style = OVERLAY_STYLES[action] || OVERLAY_STYLES.TRASH;
+
+  return (
+    <div
+      className={`absolute bottom-6 left-4 right-4 z-20 border-2 rounded-xl p-4 backdrop-blur-sm text-white cursor-pointer ${style}`}
+      onClick={onDismiss}
+    >
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-2xl font-bold">{ACTION_LABELS[action] || action}</span>
+        <span className="text-xs opacity-60 uppercase">{confidence} confidence</span>
+      </div>
+      {item && <div className="text-sm font-medium opacity-80 mb-1">{item}</div>}
+      <div className="text-sm">{reason}</div>
+      <div className="text-xs opacity-50 mt-2">{city} &middot; tap to dismiss</div>
+    </div>
+  );
+}

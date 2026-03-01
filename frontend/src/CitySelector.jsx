@@ -10,7 +10,7 @@ export default function CitySelector({ value, onChange }) {
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="border border-blue-800 bg-gray-900 text-gray-100 rounded px-3 py-2 text-base focus:border-blue-500 focus:outline-none"
+      className="bg-black/60 backdrop-blur-sm text-white border border-white/30 rounded-full px-3 py-1.5 text-sm focus:border-white/60 focus:outline-none appearance-none cursor-pointer"
     >
       {CITIES.map((c) => (
         <option key={c.value} value={c.value}>

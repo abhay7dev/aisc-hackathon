@@ -63,8 +63,8 @@ def get_facility_verdict(item_identification: dict, city: str) -> dict:
     condition = item_identification.get("condition", "normal")
     is_disposable = item_identification.get("is_disposable", True)
 
-    query = f"{item_name} {material} {color} {city} MRF recycling"
-    docs = vectorstore.similarity_search(query, k=4)
+    query = f"{item_name} {material} {color} MRF recycling"
+    docs = vectorstore.similarity_search(query, k=4, filter={"city": city})
 
     if not docs:
         raise ValueError("No facility documents found — cannot classify without MRF specs")

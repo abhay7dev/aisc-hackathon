@@ -6,10 +6,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlmodel import Session, select
 
+from classify import classify_image
 from database import create_db_and_tables, engine
 from models import Scan
 from rag import get_facility_verdict
-from vlm_identify import identify_object_vlm
 
 VALID_CITIES = {"seattle", "nyc", "la", "chicago"}
 
@@ -46,44 +46,27 @@ async def scan(image: UploadFile = File(None), city: str = Form("seattle")):
     image_bytes = await image.read()
 
     try:
-        vlm_result = identify_object_vlm(image_bytes)
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"error": "VLM identification error", "detail": str(e)},
-        )
-
-    print(f"[scan] vlm identified: {vlm_result['item_name']}")
-
-    try:
-        verdict = get_facility_verdict(vlm_result, city)
-    except ValueError as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        result = classify_image(image_bytes, city)
     except Exception as e:
         return JSONResponse(
             status_code=500,
             content={"error": "Classification error", "detail": str(e)},
         )
 
-    item_name = vlm_result["item_name"]
-    result = {
-        "item": item_name,
-        "action": verdict["action"],
-        "reason": verdict["reason"],
-        "confidence": verdict["confidence"],
-        "city": city,
-    }
+    result["city"] = city
 
-    with Session(engine) as session:
-        scan_record = Scan(
-            item=item_name,
-            action=verdict["action"],
-            reason=verdict["reason"],
-            confidence=verdict["confidence"],
-            city=city,
-        )
-        session.add(scan_record)
-        session.commit()
+    # Don't log N/A results
+    if result["action"] != "N/A":
+        with Session(engine) as session:
+            scan_record = Scan(
+                item=result["item"],
+                action=result["action"],
+                reason=result["reason"],
+                confidence=result["confidence"],
+                city=city,
+            )
+            session.add(scan_record)
+            session.commit()
 
     return result
 
